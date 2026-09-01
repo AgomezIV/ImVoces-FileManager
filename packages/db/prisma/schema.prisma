@@ -172,9 +172,13 @@ model TransferItem {
   finishedAt    DateTime?
   createdAt     DateTime     @default(now())
 
-  job         TransferJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  srcAccount  StorageAccount @relation("srcAccount", fields: [srcAccountId], references: [id])
-  destAccount StorageAccount @relation("destAccount", fields: [destAccountId], references: [id])
+  job TransferJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// En cascada: al borrar un usuario, sus cuentas se van con el, y estas FK
+  /// bloquearian ese borrado si fueran RESTRICT. El historial de una cuenta
+  /// que se desconecta se preserva de otra forma: la API la marca DISABLED en
+  /// lugar de borrarla cuando tiene transferencias asociadas.
+  srcAccount  StorageAccount @relation("srcAccount", fields: [srcAccountId], references: [id], onDelete: Cascade)
+  destAccount StorageAccount @relation("destAccount", fields: [destAccountId], references: [id], onDelete: Cascade)
 
   /// Idempotencia: reencolar el mismo origen→destino dentro de un job no duplica trabajo.
   @@unique([jobId, srcAccountId, srcPath, destAccountId, destPath])
