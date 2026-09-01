@@ -70,18 +70,29 @@ jobs:
       - run: flutter analyze
       - run: flutter test
 
-      # El keystore de firma llega por secrets; sin él el build sale firmado en
+      # El keystore de firma llega por secrets; sin el, el build sale firmado en
       # debug, que sirve para probar pero no para distribuir.
+      #
+      # El contexto `secrets` no se puede usar en un `if:` de paso, asi que los
+      # secretos entran por `env` y la ausencia se comprueba dentro del script.
       - name: Restaurar keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/imvoces.jks
-          cat > android/key.properties <<EOP
-          storeFile=imvoces.jks
-          storePassword=${{ secrets.ANDROID_STORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOP
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Sin ANDROID_KEYSTORE_BASE64: el APK saldra firmado en debug."
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/imvoces.jks
+          {
+            echo "storeFile=imvoces.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
 
       # --split-per-abi genera un APK por arquitectura: ~40% menos de tamaño.
       - name: Compilar APK
