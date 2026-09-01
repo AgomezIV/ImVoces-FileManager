@@ -1,5 +1,8 @@
-/// Modelos del cliente móvil. Reflejan `packages/contracts` (Zod → JSON):
-/// si allí cambia un campo, aquí falla el parseo, que es lo que se quiere.
+// Modelos del cliente móvil. Reflejan `packages/contracts` (Zod → JSON):
+// si allí cambia un campo, aquí falla el parseo, que es lo que se quiere.
+//
+// Comentario normal, no `///`: describe el fichero y no una declaracion, y
+// como doc quedaria colgando (dangling_library_doc_comments).
 
 class StorageAccount {
   const StorageAccount({
