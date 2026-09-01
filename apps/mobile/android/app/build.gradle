@@ -4,15 +4,20 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// La firma de release sale de android/key.properties, que nunca se commitea.
+// En CI lo escribe el paso "Restaurar keystore" a partir de los secrets.
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file('key.properties')
-if (keystorePropertiesFile.exists()) {
+def hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
 android {
     namespace = "com.imvoces.filemanager"
-    compileSdk = 35
+    // 34, no 35: AGP 8.1 (la version que fija settings.gradle) no admite
+    // compilar contra 35. Subir ambos va junto.
+    compileSdk = 34
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -26,19 +31,17 @@ android {
         // google_sign_in y flutter_secure_storage exigen 21+; se fija 24 por
         // el soporte de TLS moderno.
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     signingConfigs {
         release {
-            // Sin key.properties (p. ej. en un clon recien hecho) se compila en
-            // debug: `flutter build apk` no debe fallar por falta de keystore.
-            if (keystorePropertiesFile.exists()) {
+            if (hasKeystore) {
                 keyAlias = keystoreProperties['keyAlias']
                 keyPassword = keystoreProperties['keyPassword']
-                storeFile = keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                storeFile = file(keystoreProperties['storeFile'])
                 storePassword = keystoreProperties['storePassword']
             }
         }
@@ -46,12 +49,18 @@ android {
 
     buildTypes {
         release {
-            signingConfig = keystorePropertiesFile.exists()
-                ? signingConfigs.release
-                : signingConfigs.debug
-            minifyEnabled = true
-            shrinkResources = true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Sin keystore (un clon recien hecho, o CI sin secrets) se firma en
+            // debug: sirve para probar, no para distribuir.
+            if (hasKeystore) {
+                signingConfig = signingConfigs.release
+            } else {
+                signingConfig = signingConfigs.debug
+            }
+            // R8 desactivado de momento: con google_sign_in y play-services hace
+            // falta una pasada de reglas propias, y un "Missing class" romperia
+            // el build sin que podamos probarlo en un dispositivo todavia.
+            minifyEnabled = false
+            shrinkResources = false
         }
     }
 }
