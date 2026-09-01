@@ -162,3 +162,4 @@ packages/db/generated/
 
 # Turbo/otros cachés
 .turbo/
+apps/web/.next/

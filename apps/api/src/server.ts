@@ -26,7 +26,7 @@ export async function buildServer(): Promise<FastifyInstance> {
     logger: {
       level: env.NODE_ENV === 'development' ? 'debug' : 'info',
       // Nunca volcar cabeceras: llevan el Bearer y la cookie de refresh.
-      redact: ['req.headers.authorization', 'req.headers.cookie'],
+      redact: ['req.headers.authorization', 'req.headers.cookie', 'req.query.access_token'],
     },
     trustProxy: true,
     bodyLimit: 2 * 1024 * 1024,
@@ -44,11 +44,24 @@ export async function buildServer(): Promise<FastifyInstance> {
     keyGenerator: (req) => req.userId ?? req.ip,
   });
 
-  /** Guard de sesión: exige un access token válido y expone `req.userId`. */
+  /**
+   * Guard de sesión: exige un access token válido y expone `req.userId`.
+   *
+   * `EventSource` (el SSE del navegador) no permite fijar cabeceras, así que
+   * en ESE endpoint —y solo ahí— se acepta el token por query. Es de solo
+   * lectura, dura 15 minutos y el logger redacta la URL para que no acabe en
+   * los registros.
+   */
   app.decorate('requireUser', async (req: FastifyRequest) => {
     const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) throw unauthorized('Falta cabecera Authorization');
-    const claims = await verifyAccessToken(header.slice(7));
+    let token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
+
+    if (!token && req.method === 'GET' && req.url.includes('/events')) {
+      token = (req.query as { access_token?: string }).access_token;
+    }
+    if (!token) throw unauthorized('Falta cabecera Authorization');
+
+    const claims = await verifyAccessToken(token);
     req.userId = claims.sub;
     req.sessionId = claims.sid;
   });
