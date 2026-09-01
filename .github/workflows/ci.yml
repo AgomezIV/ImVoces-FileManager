@@ -12,9 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sin `version:` a proposito: la accion falla si se le fija una version
+      # teniendo el `packageManager` del package.json, que es de donde debe
+      # salir la unica fuente de verdad.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
 
       - uses: actions/setup-node@v4
         with:
