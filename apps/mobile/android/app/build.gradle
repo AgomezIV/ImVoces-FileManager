@@ -1,0 +1,68 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// La firma de release sale de android/key.properties, que nunca se commitea.
+// En CI lo escribe el paso "Restaurar keystore" a partir de los secrets.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+def hasKeystore = keystorePropertiesFile.exists()
+if (hasKeystore) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    namespace = "com.imvoces.filemanager"
+    // 34, no 35: AGP 8.1 (la version que fija settings.gradle) no admite
+    // compilar contra 35. Subir ambos va junto.
+    compileSdk = 34
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = "17" }
+
+    defaultConfig {
+        applicationId = "com.imvoces.filemanager"
+        // google_sign_in y flutter_secure_storage exigen 21+; se fija 24 por
+        // el soporte de TLS moderno.
+        minSdk = 24
+        targetSdk = 34
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        release {
+            if (hasKeystore) {
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
+                storeFile = file(keystoreProperties['storeFile'])
+                storePassword = keystoreProperties['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Sin keystore (un clon recien hecho, o CI sin secrets) se firma en
+            // debug: sirve para probar, no para distribuir.
+            if (hasKeystore) {
+                signingConfig = signingConfigs.release
+            } else {
+                signingConfig = signingConfigs.debug
+            }
+            // R8 desactivado de momento: con google_sign_in y play-services hace
+            // falta una pasada de reglas propias, y un "Missing class" romperia
+            // el build sin que podamos probarlo en un dispositivo todavia.
+            minifyEnabled = false
+            shrinkResources = false
+        }
+    }
+}
+
+flutter { source = "../.." }

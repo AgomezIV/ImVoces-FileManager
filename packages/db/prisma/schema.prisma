@@ -1,0 +1,201 @@
+// ImVoces FileManager — esquema de datos
+// Motor: PostgreSQL (servidor del proyecto: 74.208.99.84)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Usuario de la aplicación. La identidad viene de Google Sign-In (OIDC).
+model User {
+  id        String   @id @default(cuid())
+  googleSub String   @unique
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+  accounts StorageAccount[]
+  jobs     TransferJob[]
+  auditLog AuditLog[]
+}
+
+/// Sesión de un dispositivo. El refresh token se guarda hasheado (SHA-256) y rota en cada uso.
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @unique
+  device           String?
+  userAgent        String?
+  ip               String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum ProviderId {
+  GDRIVE
+  R2
+  S3
+  DROPBOX
+  ONEDRIVE
+}
+
+enum AccountStatus {
+  ACTIVE
+  NEEDS_REAUTH
+  ERROR
+  DISABLED
+}
+
+/// Cuenta de almacenamiento conectada por el usuario.
+/// `credentialsEnc` guarda tokens/llaves cifrados con AES-256-GCM: nunca se exponen por la API.
+model StorageAccount {
+  id             String        @id @default(cuid())
+  userId         String
+  provider       ProviderId
+  label          String
+  /// Identificador en el proveedor (email de Drive, account id de R2…). Único por usuario+proveedor.
+  externalId     String
+  credentialsEnc String
+  scopes         String[]      @default([])
+  status         AccountStatus @default(ACTIVE)
+  lastError      String?
+  quotaUsed      BigInt?
+  quotaTotal     BigInt?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  srcItems  TransferItem[] @relation("srcAccount")
+  destItems TransferItem[] @relation("destAccount")
+
+  @@unique([userId, provider, externalId])
+  @@index([userId])
+}
+
+/// Estado pendiente de un flujo OAuth (protege contra CSRF y transporta el destino).
+model OAuthState {
+  state     String     @id
+  userId    String
+  provider  ProviderId
+  verifier  String?
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+
+  @@index([expiresAt])
+}
+
+enum TransferKind {
+  COPY
+  MOVE
+}
+
+enum JobStatus {
+  QUEUED
+  EXPANDING
+  RUNNING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+  CANCELLED
+}
+
+/// Una operación "copiar/mover de A a B" pedida por el usuario.
+model TransferJob {
+  id          String       @id @default(cuid())
+  userId      String
+  kind        TransferKind
+  status      JobStatus    @default(QUEUED)
+  totalBytes  BigInt       @default(0)
+  doneBytes   BigInt       @default(0)
+  itemsTotal  Int          @default(0)
+  itemsDone   Int          @default(0)
+  itemsFailed Int          @default(0)
+  error       String?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items TransferItem[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+enum ItemStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum VerifyResult {
+  NONE
+  SIZE_ONLY
+  CHECKSUM
+}
+
+/// Un archivo concreto dentro de un job. La expansión de carpetas la hace el worker.
+model TransferItem {
+  id            String       @id @default(cuid())
+  jobId         String
+  srcAccountId  String
+  srcPath       String
+  srcNativeId   String?
+  destAccountId String
+  destPath      String
+  size          BigInt       @default(0)
+  bytesDone     BigInt       @default(0)
+  status        ItemStatus   @default(PENDING)
+  attempts      Int          @default(0)
+  /// Estado de reanudación: { uploadId, parts:[{n,etag}], offset } — permite continuar un multipart.
+  resumeState   Json?
+  checksum      String?
+  verified      VerifyResult @default(NONE)
+  error         String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime     @default(now())
+
+  job TransferJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  /// En cascada: al borrar un usuario, sus cuentas se van con el, y estas FK
+  /// bloquearian ese borrado si fueran RESTRICT. El historial de una cuenta
+  /// que se desconecta se preserva de otra forma: la API la marca DISABLED en
+  /// lugar de borrarla cuando tiene transferencias asociadas.
+  srcAccount  StorageAccount @relation("srcAccount", fields: [srcAccountId], references: [id], onDelete: Cascade)
+  destAccount StorageAccount @relation("destAccount", fields: [destAccountId], references: [id], onDelete: Cascade)
+
+  /// Idempotencia: reencolar el mismo origen→destino dentro de un job no duplica trabajo.
+  @@unique([jobId, srcAccountId, srcPath, destAccountId, destPath])
+  @@index([jobId, status])
+}
+
+/// Traza de toda acción destructiva o sensible.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  target    Json?
+  result    String
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+}

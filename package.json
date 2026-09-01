@@ -1,0 +1,24 @@
+{
+  "name": "imvoces-filemanager",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "db:generate": "pnpm --filter @imvoces/db generate",
+    "db:migrate": "pnpm --filter @imvoces/db migrate",
+    "db:push": "pnpm --filter @imvoces/db push",
+    "test:unit": "node --test --experimental-strip-types packages/providers/src/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2",
+    "@types/node": "^22.10.1"
+  }
+}

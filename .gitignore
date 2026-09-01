@@ -141,3 +141,25 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# ─── Proyecto ImVoces ───────────────────────────────────────────────
+# Flutter / Android
+apps/mobile/build/
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
+apps/mobile/android/key.properties
+apps/mobile/ios/Pods/
+*.jks
+*.keystore
+*.apk
+*.aab
+
+# Prisma
+packages/db/generated/
+
+# Turbo/otros cachés
+.turbo/
+apps/web/.next/
