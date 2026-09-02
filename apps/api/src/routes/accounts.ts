@@ -14,7 +14,7 @@ import { env, managedStorageReady, oauthApps } from '../env.js';
 import { badRequest, notFound } from '../lib/errors.js';
 import { audit } from '../lib/audit.js';
 import { buildProvider, ownedAccount, toAccountView } from '../lib/accounts.js';
-import { ensureManagedAccount, isManagedAccount } from '../lib/managed-storage.js';
+import { ensureManagedAccount, isManagedAccount, MANAGED_EXTERNAL_ID } from '../lib/managed-storage.js';
 
 /**
  * Scopes de Drive. Se arranca con `drive.file` (solo lo que la app crea o el
@@ -51,8 +51,14 @@ const OAUTH_CONFIG: Record<
     tokenUrl: 'https://oauth2.googleapis.com/token',
     scopes: DRIVE_SCOPES,
     app: () => ({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }),
+    // `select_account` deja elegir CUÁL cuenta conectar: sin él Google reutiliza
+    // la sesión abierta y sería imposible añadir un segundo Drive.
     // `consent` fuerza refresh_token también al reconectar una cuenta ya vista.
-    extraAuthParams: { access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true' },
+    extraAuthParams: {
+      access_type: 'offline',
+      prompt: 'select_account consent',
+      include_granted_scopes: 'true',
+    },
   },
   DROPBOX: {
     authUrl: DROPBOX_AUTH_URL,
@@ -67,7 +73,8 @@ const OAUTH_CONFIG: Record<
     tokenUrl: MS_TOKEN_URL,
     scopes: MS_SCOPES,
     app: () => oauthApps.microsoft,
-    extraAuthParams: { response_mode: 'query' },
+    // Igual que en Google: sin `select_account` no se puede añadir un segundo OneDrive.
+    extraAuthParams: { response_mode: 'query', prompt: 'select_account' },
   },
 };
 
@@ -237,7 +244,17 @@ export async function accountRoutes(app: FastifyInstance) {
     // Un listado de un elemento confirma credenciales, endpoint y permisos de una vez.
     await probe.list({ path: '/' }, { pageSize: 1 });
 
-    if (input.bucket === 'imvoces-managed') {
+    /**
+     * Identidad de la cuenta dentro del proveedor.
+     *
+     * El bucket solo no basta: dos cuentas distintas de Cloudflare pueden tener
+     * un bucket con el mismo nombre, y se pisarían al vincular la segunda. El
+     * endpoint (o la región, en S3 de AWS) los separa.
+     */
+    const host = input.endpoint ? new URL(input.endpoint).host : input.region;
+    const externalId = `${host}/${input.bucket}`;
+
+    if (externalId === MANAGED_EXTERNAL_ID || input.bucket === MANAGED_EXTERNAL_ID) {
       throw badRequest('Ese identificador está reservado por la aplicación.');
     }
 
@@ -246,14 +263,14 @@ export async function accountRoutes(app: FastifyInstance) {
         userId_provider_externalId: {
           userId: req.userId,
           provider: input.provider,
-          externalId: input.bucket,
+          externalId,
         },
       },
       create: {
         userId: req.userId,
         provider: input.provider,
         label: input.label,
-        externalId: input.bucket,
+        externalId,
         credentialsEnc: encryptJson(creds),
       },
       update: { label: input.label, credentialsEnc: encryptJson(creds), status: 'ACTIVE', lastError: null },

@@ -7,6 +7,16 @@ import { badRequest, notFound } from '../lib/errors.js';
 import { providerForUser } from '../lib/accounts.js';
 import { audit } from '../lib/audit.js';
 
+/** Traduce la cabecera `Range` del navegador al rango que entiende el driver. */
+function parseRange(header: string | undefined, size: number): { start: number; end?: number } | null {
+  if (!header?.startsWith('bytes=')) return null;
+  const [rawStart, rawEnd] = header.slice(6).split('-');
+  const start = Number(rawStart);
+  if (!Number.isFinite(start) || start < 0 || (size > 0 && start >= size)) return null;
+  const end = rawEnd ? Number(rawEnd) : undefined;
+  return { start, end: Number.isFinite(end) ? end : undefined };
+}
+
 /** Endpoints del explorador. Todos operan sobre rutas normalizadas y cuentas propias. */
 export async function fsRoutes(app: FastifyInstance) {
   app.addHook('preHandler', app.requireUser);
@@ -77,6 +87,55 @@ export async function fsRoutes(app: FastifyInstance) {
     const provider = await providerForUser(req.userId, accountId);
     if (!provider.signedUrl) throw notFound('Este proveedor no emite URLs de descarga');
     return { url: await provider.signedUrl({ path: normalizePath(path) }, 900) };
+  });
+
+  /**
+   * Sirve los bytes del archivo a través de la API.
+   *
+   * Es lo que permite ver miniaturas y previsualizaciones sin exponer las
+   * credenciales del proveedor: el navegador pide a nuestra API y esta lee del
+   * proveedor con los tokens que solo el servidor conoce. Respeta `Range`, así
+   * que un vídeo se puede saltar sin descargarlo entero.
+   */
+  app.get('/fs/content', async (req, reply) => {
+    const { accountId, path, download } = req.query as {
+      accountId?: string;
+      path?: string;
+      download?: string;
+    };
+    if (!accountId || !path) throw badRequest('Faltan accountId y path');
+
+    const provider = await providerForUser(req.userId, accountId);
+    const clean = normalizePath(path);
+    const entry = await provider.stat({ path: clean });
+    if (entry.kind === 'folder') throw badRequest('No se puede leer una carpeta');
+
+    const range = parseRange(req.headers.range, entry.size);
+    const stream = await provider.openRead({ path: clean }, range ?? undefined);
+
+    const name = clean.slice(clean.lastIndexOf('/') + 1);
+    reply
+      .header('Content-Type', entry.mimeType ?? 'application/octet-stream')
+      .header('Accept-Ranges', 'bytes')
+      // El token puede venir por query en este endpoint: sin referrer no se filtra.
+      .header('Referrer-Policy', 'no-referrer')
+      .header('Cache-Control', 'private, max-age=300')
+      .header(
+        'Content-Disposition',
+        `${download === '1' ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(name)}`,
+      );
+
+    if (range) {
+      const end = range.end ?? entry.size - 1;
+      reply
+        .status(206)
+        .header('Content-Range', `bytes ${range.start}-${end}/${entry.size}`)
+        .header('Content-Length', String(end - range.start + 1));
+    } else if (entry.size > 0) {
+      reply.header('Content-Length', String(entry.size));
+    }
+
+    return reply.send(stream);
   });
 
   app.get('/fs/search', async (req) => {

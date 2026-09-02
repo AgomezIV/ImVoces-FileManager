@@ -56,7 +56,12 @@ export async function buildServer(): Promise<FastifyInstance> {
     const header = req.headers.authorization;
     let token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
 
-    if (!token && req.method === 'GET' && req.url.includes('/events')) {
+    // `EventSource`, `<img>` y `<video>` no permiten fijar cabeceras, así que en
+    // esos dos endpoints —y solo ahí— se acepta el token por query. Los dos son
+    // de solo lectura, el token dura 15 minutos, el logger redacta la URL y la
+    // respuesta va con `Referrer-Policy: no-referrer`.
+    const byQuery = req.method === 'GET' && (req.url.includes('/events') || req.url.includes('/fs/content'));
+    if (!token && byQuery) {
       token = (req.query as { access_token?: string }).access_token;
     }
     if (!token) throw unauthorized('Falta cabecera Authorization');
