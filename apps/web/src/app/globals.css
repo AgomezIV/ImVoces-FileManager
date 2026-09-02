@@ -1,71 +1,153 @@
-/* Tokens de diseño compartidos con la app Flutter (apps/mobile/lib/theme.dart). */
+/* Sistema visual de ImVoces. Los mismos tokens viven en apps/mobile/lib/theme.dart. */
 :root {
-  --bg: #f6f7f9;
+  color-scheme: light;
+
+  --bg: #f7f8fa;
   --surface: #ffffff;
-  --surface-2: #f0f2f5;
-  --border: #dfe3e8;
-  --text: #12161c;
-  --text-muted: #5f6875;
-  --brand: #2f6fed;
+  --surface-2: #f1f3f6;
+  --surface-3: #e8ebef;
+  --border: #e2e6ea;
+  --border-strong: #cfd5dc;
+
+  --text: #101418;
+  --text-2: #5b6672;
+  --text-3: #8a939e;
+
+  --brand: #1f7a91;
+  --brand-strong: #175f72;
   --brand-ink: #ffffff;
-  --danger: #d93b3b;
+  --brand-soft: #e6f2f5;
+
   --ok: #1f9254;
+  --warn: #b8760b;
+  --danger: #d43c3c;
+
   --radius: 10px;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.06);
+  --radius-sm: 7px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow-2: 0 4px 16px rgba(16, 24, 40, .10), 0 1px 3px rgba(16, 24, 40, .06);
+  --shadow-3: 0 16px 48px rgba(16, 24, 40, .18);
+
+  --sidebar-w: 252px;
+  --row-h: 38px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1319;
-    --surface: #161b23;
-    --surface-2: #1d232d;
-    --border: #2a323d;
-    --text: #e9edf3;
-    --text-muted: #9aa5b4;
-    --brand: #5b8dff;
-    --danger: #f06b6b;
+    color-scheme: dark;
+
+    --bg: #0e1216;
+    --surface: #151a20;
+    --surface-2: #1c232a;
+    --surface-3: #242d36;
+    --border: #262f38;
+    --border-strong: #36424e;
+
+    --text: #e9edf2;
+    --text-2: #9ba6b2;
+    --text-3: #6f7b88;
+
+    --brand: #3aa8c4;
+    --brand-ink: #06171c;
+    --brand-soft: #14313a;
+
     --ok: #45c37e;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+    --warn: #e0a53c;
+    --danger: #f06b6b;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, .45);
+    --shadow-3: 0 16px 48px rgba(0, 0, 0, .6);
   }
 }
 
 * { box-sizing: border-box; }
 
+html, body { height: 100%; }
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font: 13.5px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* ── Botones ─────────────────────────────────────────────────────────── */
 button {
   font: inherit;
+  color: inherit;
   cursor: pointer;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-strong);
   background: var(--surface);
-  color: var(--text);
-  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  padding: 6px 11px;
+  white-space: nowrap;
+  transition: background .12s ease, border-color .12s ease, opacity .12s ease;
 }
 button:hover:not(:disabled) { background: var(--surface-2); }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.primary { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
-button.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--brand); }
+button:active:not(:disabled) { background: var(--surface-3); }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 
+button.primary {
+  background: var(--brand);
+  color: var(--brand-ink);
+  border-color: transparent;
+  font-weight: 550;
+}
+button.primary:hover:not(:disabled) { background: var(--brand); filter: brightness(1.08); }
+
+button.ghost { border-color: transparent; background: transparent; }
+button.ghost:hover:not(:disabled) { background: var(--surface-2); }
+
+button.danger { color: var(--danger); }
+button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+button.icon { padding: 6px; border-color: transparent; background: transparent; }
+button.icon:hover:not(:disabled) { background: var(--surface-2); }
+
+/* ── Formularios ─────────────────────────────────────────────────────── */
 input, select {
   font: inherit;
-  padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
+  color: inherit;
   background: var(--surface);
-  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  width: 100%;
 }
+input:focus, select:focus { outline: 2px solid var(--brand); outline-offset: -1px; border-color: transparent; }
+input::placeholder { color: var(--text-3); }
 
+/* ── Piezas ──────────────────────────────────────────────────────────── */
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-1);
 }
 
-.muted { color: var(--text-muted); }
+.muted { color: var(--text-2); }
+.dim { color: var(--text-3); }
+
+.tag {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 20px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+/* Scrollbars discretas, para que la lista mande sobre el cromo. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid transparent; background-clip: content-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes imv-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

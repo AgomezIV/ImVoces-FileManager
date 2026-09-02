@@ -63,20 +63,33 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
+/**
+ * Renueva la sesión con la cookie de refresh.
+ *
+ * Nunca lanza: la API caída o sin red devuelve `false` igual que un rechazo.
+ * Si propagara la excepción, quien la llama al arrancar se quedaría sin
+ * resolver y la aplicación colgaría en la pantalla de carga.
+ */
 export async function refreshSession(): Promise<boolean> {
-  const res = await fetch(`${BASE}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  if (!res.ok) {
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!res.ok) {
+      setAccessToken(null);
+      return false;
+    }
+    const data = (await res.json()) as { accessToken: string };
+    setAccessToken(data.accessToken);
+    return true;
+  } catch {
+    // Error de red: no hay sesión utilizable, pero tampoco es un fallo fatal.
     setAccessToken(null);
     return false;
   }
-  const data = (await res.json()) as { accessToken: string };
-  setAccessToken(data.accessToken);
-  return true;
 }
 
 export const api = {

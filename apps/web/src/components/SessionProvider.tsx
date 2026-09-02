@@ -30,13 +30,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const ok = await refreshSession();
-      if (!alive) return;
-      if (ok) {
-        const me = await api.me().catch(() => null);
-        if (alive) setUser(me);
+      try {
+        const ok = await refreshSession();
+        if (!alive) return;
+        if (ok) {
+          const me = await api.me().catch(() => null);
+          if (alive) setUser(me);
+        }
+      } finally {
+        // Pase lo que pase se sale de la pantalla de carga: quedarse cargando
+        // para siempre es peor que mostrar el login.
+        if (alive) setLoading(false);
       }
-      if (alive) setLoading(false);
     })();
     return () => {
       alive = false;

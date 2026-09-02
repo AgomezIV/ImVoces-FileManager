@@ -213,10 +213,13 @@ Todo definido en `packages/contracts` (Zod → OpenAPI 3.1) y de ahí se generan
 Next.js 15 (App Router) + TypeScript, TanStack Query para caché/optimistic updates, Tailwind +
 componentes de `packages/ui`.
 
-- **Explorador de doble panel** (origen | destino) con breadcrumbs, selección múltiple, vista
-  lista/cuadrícula. Es la interfaz que hace literal el "un clic": seleccionar → botón central
-  **Copiar →** / **← Copiar**.
-- **Drag & drop** entre paneles, y también desde el escritorio para subir.
+- **Explorador de una vista**, como cualquier gestor de archivos: barra lateral con las nubes
+  conectadas como ubicaciones, migas de pan, ordenación por columna y selección múltiple
+  (clic, ctrl+clic, shift+clic).
+- **Copiar entre nubes** con la barra de acciones de la selección: **Copiar a…** abre un
+  selector de destino donde se elige nube y carpeta. Es el mismo gesto que mover a otra
+  carpeta local, así que no hay que aprender nada nuevo.
+- **Drag & drop** de la selección sobre una ubicación de la barra lateral para copiar allí.
 - **Selector de cuenta** por panel; conectar una cuenta nueva es una tarjeta más en el selector.
 - **Bandeja de transferencias** flotante y persistente (como la de Drive): progreso por ítem,
   velocidad, ETA, cancelar, reintentar fallidos. Sobrevive a la navegación entre páginas.
@@ -228,7 +231,7 @@ componentes de `packages/ui`.
 Flutter 3.x, Riverpod (estado), go_router (navegación), dio + cliente generado del OpenAPI,
 `google_sign_in`, `flutter_secure_storage`.
 
-- **Un panel a la vez** (el doble panel no cabe en móvil): navegas el origen, seleccionas, pulsas
+- **Un panel a la vez**, igual que la web: navegas, seleccionas, pulsas
   **Enviar a…** y un bottom-sheet muestra tus cuentas y un mini-navegador para elegir destino.
   Dos toques desde la selección hasta la transferencia en marcha.
 - Pestañas inferiores: **Archivos · Transferencias · Cuentas**.

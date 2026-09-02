@@ -8,7 +8,7 @@ tu conexión y no se detienen si cierras la app.
 
 Dos clientes sobre un mismo backend:
 
-- **Web** — Next.js, explorador de doble panel con arrastrar y soltar.
+- **Web** — Next.js, explorador con barra lateral de ubicaciones, como cualquier gestor de archivos.
 - **Android** — Flutter, distribuible como `.apk`.
 
 ## Arquitectura
