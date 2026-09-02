@@ -77,7 +77,7 @@ function S3Form({ onDone }: { onDone: () => void }) {
 }
 
 /** Tarjeta de "conectar": un clic y el usuario solo ve el login de su proveedor. */
-function ConnectCard({ provider }: { provider: AvailableProvider }) {
+function ConnectCard({ provider, connected }: { provider: AvailableProvider; connected: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,8 +121,21 @@ function ConnectCard({ provider }: { provider: AvailableProvider }) {
         {provider.name.charAt(0)}
       </span>
       <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
-        <strong>{provider.name}</strong>
-        <span className="muted">{busy ? 'Abriendo…' : provider.tagline}</span>
+        <strong>
+          {provider.name}
+          {connected > 0 && (
+            <span className="tag" style={{ marginLeft: 8, fontWeight: 400 }}>
+              {connected} conectada{connected === 1 ? '' : 's'}
+            </span>
+          )}
+        </strong>
+        <span className="muted">
+          {busy
+            ? 'Abriendo…'
+            : connected > 0
+              ? 'Añadir otra cuenta'
+              : provider.tagline}
+        </span>
         {error && <span style={{ color: 'var(--danger)' }}>{error}</span>}
       </span>
     </button>
@@ -138,9 +151,17 @@ export default function AccountsPage() {
   const accounts = data?.accounts ?? [];
   const available = data?.available ?? [];
 
-  // Un proveedor ya conectado no se vuelve a ofrecer como tarjeta de alta.
-  const connectedIds = new Set(accounts.filter((a) => a.status === 'ACTIVE').map((a) => a.provider));
-  const toConnect = available.filter((p) => !connectedIds.has(p.id as never));
+  /**
+   * Cuántas cuentas hay ya de cada proveedor.
+   *
+   * Un proveedor conectado se sigue ofreciendo: se pueden vincular varias
+   * cuentas del mismo servicio —dos Drive, tres buckets de R2— y todas
+   * aparecen como ubicaciones independientes.
+   */
+  const countByProvider = accounts.reduce<Record<string, number>>((acc, a) => {
+    acc[a.provider] = (acc[a.provider] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const disconnect = async (id: string) => {
     if (!window.confirm('¿Desconectar esta cuenta?')) return;
@@ -192,16 +213,17 @@ export default function AccountsPage() {
         </section>
       )}
 
-      {toConnect.length > 0 && (
+      {available.length > 0 && (
         <section style={{ display: 'grid', gap: 10 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 16 }}>Conectar una nube</h2>
             <p className="muted" style={{ margin: '4px 0 0' }}>
               Inicias sesión con tu cuenta de siempre. No necesitas claves ni configurar nada.
+              Puedes vincular varias cuentas del mismo servicio.
             </p>
           </div>
-          {toConnect.map((p) => (
-            <ConnectCard key={p.id} provider={p} />
+          {available.map((p) => (
+            <ConnectCard key={p.id} provider={p} connected={countByProvider[p.id] ?? 0} />
           ))}
         </section>
       )}

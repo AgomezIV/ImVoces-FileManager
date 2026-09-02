@@ -151,3 +151,25 @@ input::placeholder { color: var(--text-3); }
 *::-webkit-scrollbar-track { background: transparent; }
 
 @keyframes imv-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+@keyframes imv-menu-in {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Entrada de la carpeta al navegar: da sensación de avanzar sin distraer. */
+@keyframes imv-enter-folder {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes imv-leave-folder {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

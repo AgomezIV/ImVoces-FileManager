@@ -120,10 +120,31 @@ export const api = {
     ),
   createFolder: (accountId: string, parentPath: string, name: string) =>
     request<RemoteEntry>('/fs/folder', { method: 'POST', body: JSON.stringify({ accountId, parentPath, name }) }),
-  rename: (accountId: string, path: string, newName: string) =>
-    request<RemoteEntry>('/fs/rename', { method: 'PATCH', body: JSON.stringify({ accountId, path, newName }) }),
-  remove: (accountId: string, paths: string[]) =>
-    request<{ failed: number }>('/fs', { method: 'DELETE', body: JSON.stringify({ accountId, paths }) }),
+  rename: (accountId: string, path: string, newName: string, nativeId?: string | null) =>
+    request<RemoteEntry>('/fs/rename', {
+      method: 'PATCH',
+      body: JSON.stringify({ accountId, path, newName, nativeId: nativeId ?? undefined }),
+    }),
+  remove: (accountId: string, items: { path: string; nativeId?: string | null }[]) =>
+    request<{ failed: number }>('/fs', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        accountId,
+        items: items.map((i) => ({ path: i.path, nativeId: i.nativeId ?? undefined })),
+      }),
+    }),
+  /**
+   * URL directa a los bytes del archivo, servida por nuestra API.
+   *
+   * `<img>` y `<video>` no pueden mandar cabeceras, así que el token va en la
+   * query — la API solo lo acepta en este endpoint y en el de eventos.
+   */
+  contentUrl: (accountId: string, path: string, download = false, nativeId?: string | null) =>
+    `${BASE}/fs/content?accountId=${encodeURIComponent(accountId)}&path=${encodeURIComponent(path)}` +
+    (nativeId ? `&nativeId=${encodeURIComponent(nativeId)}` : '') +
+    (download ? '&download=1' : '') +
+    `&access_token=${encodeURIComponent(getAccessToken() ?? '')}`,
+
   downloadUrl: (accountId: string, path: string) =>
     request<{ url: string }>(
       `/fs/download-url?accountId=${encodeURIComponent(accountId)}&path=${encodeURIComponent(path)}`,

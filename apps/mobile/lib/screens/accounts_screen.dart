@@ -32,12 +32,13 @@ class AccountsScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('$err')),
         data: (data) {
-          final connected = {
-            for (final a in data.accounts)
-              if (a.status == 'ACTIVE') a.provider,
-          };
-          final toConnect =
-              data.available.where((p) => !connected.contains(p.id)).toList();
+          // Un proveedor ya conectado se sigue ofreciendo: se pueden vincular
+          // varias cuentas del mismo servicio y todas salen como ubicaciones.
+          final countByProvider = <String, int>{};
+          for (final a in data.accounts) {
+            countByProvider[a.provider] = (countByProvider[a.provider] ?? 0) + 1;
+          }
+          final toConnect = data.available;
 
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(accountsViewProvider),
@@ -82,11 +83,16 @@ class AccountsScreen extends ConsumerWidget {
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Text(
                       'Inicias sesión con tu cuenta de siempre. No necesitas claves '
-                      'ni configurar nada.',
+                      'ni configurar nada. Puedes vincular varias cuentas del mismo '
+                      'servicio.',
                     ),
                   ),
                   for (final p in toConnect)
-                    _ConnectTile(provider: p, onTap: () => _connect(context, ref, p.id)),
+                    _ConnectTile(
+                      provider: p,
+                      connected: countByProvider[p.id] ?? 0,
+                      onTap: () => _connect(context, ref, p.id),
+                    ),
                 ],
 
                 if (data.available.isEmpty)
@@ -124,9 +130,16 @@ class AccountsScreen extends ConsumerWidget {
 }
 
 class _ConnectTile extends StatelessWidget {
-  const _ConnectTile({required this.provider, required this.onTap});
+  const _ConnectTile({
+    required this.provider,
+    required this.connected,
+    required this.onTap,
+  });
 
   final AvailableProvider provider;
+
+  /// Cuántas cuentas de este proveedor hay ya vinculadas.
+  final int connected;
   final VoidCallback onTap;
 
   @override
@@ -148,8 +161,16 @@ class _ConnectTile extends StatelessWidget {
             style: TextStyle(color: Color(provider.color), fontWeight: FontWeight.bold),
           ),
         ),
-        title: Text(provider.name),
-        subtitle: Text(provider.tagline),
+        title: Row(
+          children: [
+            Flexible(child: Text(provider.name, overflow: TextOverflow.ellipsis)),
+            if (connected > 0) ...[
+              const SizedBox(width: 8),
+              _Pill(text: '$connected'),
+            ],
+          ],
+        ),
+        subtitle: Text(connected > 0 ? 'Añadir otra cuenta' : provider.tagline),
         trailing: const Icon(Icons.chevron_right),
       ),
     );

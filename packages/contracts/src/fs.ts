@@ -40,12 +40,23 @@ export const createFolderSchema = z.object({
 export const renameSchema = z.object({
   accountId: z.string().min(1),
   path: z.string().min(1),
+  /**
+   * Identificador del proveedor, cuando lo hay.
+   *
+   * Google Drive admite dos archivos con el MISMO nombre en la misma carpeta,
+   * así que la ruta no identifica a uno solo. Con el id nativo la operación
+   * apunta exactamente al archivo elegido y no al primero que coincida.
+   */
+  nativeId: z.string().optional(),
   newName: z.string().min(1).max(255),
 });
 
 export const deleteSchema = z.object({
   accountId: z.string().min(1),
-  paths: z.array(z.string().min(1)).min(1).max(500),
+  items: z
+    .array(z.object({ path: z.string().min(1), nativeId: z.string().optional() }))
+    .min(1)
+    .max(500),
 });
 
 export const searchQuerySchema = z.object({
