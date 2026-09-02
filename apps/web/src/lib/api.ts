@@ -12,6 +12,21 @@ export const setAccessToken = (token: string | null) => {
 };
 export const getAccessToken = () => accessToken;
 
+/** Proveedor que el servidor tiene configurado y puede ofrecer ahora mismo. */
+export interface AvailableProvider {
+  id: string;
+  name: string;
+  color: string;
+  connectMode: 'oauth' | 'managed' | 'credentials';
+  tagline: string;
+}
+
+export interface AccountsResponse {
+  accounts: (StorageAccountView & { managed?: boolean })[];
+  available: AvailableProvider[];
+  managedStorage: boolean;
+}
+
 class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -73,8 +88,13 @@ export const api = {
     ),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST', body: '{}' }, false),
 
-  accounts: () => request<{ accounts: StorageAccountView[] }>('/accounts'),
-  connectDrive: () => request<{ authUrl: string }>('/accounts/gdrive/connect', { method: 'POST', body: '{}' }),
+  accounts: () => request<AccountsResponse>('/accounts'),
+  /** Devuelve la URL de consentimiento del proveedor: el usuario solo inicia sesión. */
+  connect: (provider: string) =>
+    request<{ authUrl: string }>(`/accounts/${provider.toLowerCase()}/connect`, {
+      method: 'POST',
+      body: '{}',
+    }),
   connectS3: (input: unknown) =>
     request<StorageAccountView>('/accounts/s3', { method: 'POST', body: JSON.stringify(input) }),
   disconnect: (id: string) => request<{ ok: true }>(`/accounts/${id}`, { method: 'DELETE' }),

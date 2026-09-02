@@ -12,6 +12,7 @@ class StorageAccount {
     required this.status,
     this.quotaUsed,
     this.quotaTotal,
+    this.managed = false,
   });
 
   final String id;
@@ -21,6 +22,9 @@ class StorageAccount {
   final int? quotaUsed;
   final int? quotaTotal;
 
+  /// El espacio que incluye la aplicación: no se conecta ni se desconecta.
+  final bool managed;
+
   factory StorageAccount.fromJson(Map<String, dynamic> json) => StorageAccount(
         id: json['id'] as String,
         provider: json['provider'] as String,
@@ -28,6 +32,55 @@ class StorageAccount {
         status: json['status'] as String,
         quotaUsed: (json['quotaUsed'] as num?)?.toInt(),
         quotaTotal: (json['quotaTotal'] as num?)?.toInt(),
+        managed: json['managed'] as bool? ?? false,
+      );
+}
+
+/// Proveedor que el servidor tiene configurado y puede ofrecer.
+class AvailableProvider {
+  const AvailableProvider({
+    required this.id,
+    required this.name,
+    required this.color,
+    required this.connectMode,
+    required this.tagline,
+  });
+
+  final String id;
+  final String name;
+  final int color;
+  final String connectMode;
+  final String tagline;
+
+  factory AvailableProvider.fromJson(Map<String, dynamic> json) => AvailableProvider(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        // El servidor manda '#RRGGBB'; Flutter necesita un entero ARGB.
+        color: _parseHex(json['color'] as String?),
+        connectMode: json['connectMode'] as String,
+        tagline: json['tagline'] as String? ?? '',
+      );
+
+  static int _parseHex(String? hex) {
+    if (hex == null || !hex.startsWith('#') || hex.length != 7) return 0xFF2F6FED;
+    return 0xFF000000 | int.parse(hex.substring(1), radix: 16);
+  }
+}
+
+/// Respuesta de `GET /accounts`: cuentas del usuario y qué puede conectar.
+class AccountsView {
+  const AccountsView({required this.accounts, required this.available});
+
+  final List<StorageAccount> accounts;
+  final List<AvailableProvider> available;
+
+  factory AccountsView.fromJson(Map<String, dynamic> json) => AccountsView(
+        accounts: (json['accounts'] as List<dynamic>)
+            .map((e) => StorageAccount.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        available: ((json['available'] as List<dynamic>?) ?? const [])
+            .map((e) => AvailableProvider.fromJson(e as Map<String, dynamic>))
+            .toList(),
       );
 }
 

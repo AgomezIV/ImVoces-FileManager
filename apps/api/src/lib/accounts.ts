@@ -1,6 +1,9 @@
 import { prisma, type StorageAccount } from '@imvoces/db';
-import { encryptJson, providerFor, type DriveCredentials, type StorageProvider } from '@imvoces/providers';
-import { env } from '../env.js';
+import {
+  encryptJson, providerFor,
+  type DriveCredentials, type OAuthCredentials, type StorageProvider,
+} from '@imvoces/providers';
+import { env, oauthApps } from '../env.js';
 import { notFound } from './errors.js';
 
 /**
@@ -21,13 +24,26 @@ export function buildProvider(account: Pick<StorageAccount, 'id' | 'provider' | 
     {
       googleClientId: env.GOOGLE_CLIENT_ID,
       googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+      dropbox: oauthApps.dropbox,
+      microsoft: oauthApps.microsoft,
       onDriveTokensRefreshed: persistDriveTokens,
+      onOAuthTokensRefreshed: persistOAuthTokens,
     },
   );
 }
 
 /** Google refresca el access token por su cuenta; hay que volver a guardarlo cifrado. */
 export async function persistDriveTokens(accountId: string, creds: DriveCredentials): Promise<void> {
+  await prisma.storageAccount
+    .update({
+      where: { id: accountId },
+      data: { credentialsEnc: encryptJson(creds), status: 'ACTIVE', lastError: null },
+    })
+    .catch(() => undefined);
+}
+
+/** Dropbox y OneDrive rotan tokens por su cuenta; hay que reguardarlos cifrados. */
+export async function persistOAuthTokens(accountId: string, creds: OAuthCredentials): Promise<void> {
   await prisma.storageAccount
     .update({
       where: { id: accountId },
