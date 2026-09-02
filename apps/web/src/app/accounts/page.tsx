@@ -111,10 +111,15 @@ function ConnectCard({ provider }: { provider: AvailableProvider }) {
       <span
         aria-hidden
         style={{
-          width: 36, height: 36, borderRadius: 9,
-          background: provider.color, opacity: 0.15, flexShrink: 0,
+          width: 36, height: 36, borderRadius: 9, flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          background: `${provider.color}1f`,
+          color: provider.color,
+          fontWeight: 700,
         }}
-      />
+      >
+        {provider.name.charAt(0)}
+      </span>
       <span style={{ display: 'grid', gap: 2, minWidth: 0 }}>
         <strong>{provider.name}</strong>
         <span className="muted">{busy ? 'Abriendo…' : provider.tagline}</span>
@@ -174,7 +179,9 @@ export default function AccountsPage() {
                 <div className="muted">
                   {a.quotaTotal
                     ? `${formatBytes(a.quotaUsed ?? 0)} de ${formatBytes(a.quotaTotal)}`
-                    : a.externalId}
+                    : a.managed
+                      ? 'Espacio incluido con tu cuenta'
+                      : a.externalId}
                   {a.status !== 'ACTIVE' && ` · ${a.status}`}
                 </div>
                 {a.lastError && <div style={{ color: 'var(--danger)' }}>{a.lastError}</div>}

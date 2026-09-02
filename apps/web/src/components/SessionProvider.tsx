@@ -23,22 +23,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Al cargar, la cookie de refresh basta para recuperar la sesión sin volver a pasar por Google.
+  // Al cargar, la cookie de refresh basta para recuperar la sesión sin volver a
+  // pasar por Google. `api.me()` usa el access token que `refreshSession` acaba
+  // de dejar en memoria: leerlo de otro sitio devolvería uno caducado y la
+  // sesión, siendo válida, se vería como cerrada.
   useEffect(() => {
     let alive = true;
     void (async () => {
       const ok = await refreshSession();
       if (!alive) return;
       if (ok) {
-        const me = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
-          credentials: 'include',
-          headers: { Authorization: `Bearer ${localStorage.getItem('imv_at') ?? ''}` },
-        })
-          .then((r) => (r.ok ? (r.json() as Promise<SessionUser>) : null))
-          .catch(() => null);
-        setUser(me);
+        const me = await api.me().catch(() => null);
+        if (alive) setUser(me);
       }
-      setLoading(false);
+      if (alive) setLoading(false);
     })();
     return () => {
       alive = false;
@@ -48,14 +46,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const loginWithIdToken = useCallback(async (idToken: string) => {
     const res = await api.loginWithGoogle(idToken);
     setAccessToken(res.accessToken);
-    localStorage.setItem('imv_at', res.accessToken);
     setUser(res.user);
   }, []);
 
   const logout = useCallback(async () => {
     await api.logout().catch(() => undefined);
     setAccessToken(null);
-    localStorage.removeItem('imv_at');
     setUser(null);
   }, []);
 

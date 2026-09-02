@@ -61,7 +61,9 @@ class AccountsScreen extends ConsumerWidget {
                     subtitle: Text(
                       a.quotaTotal != null
                           ? '${formatBytes(a.quotaUsed ?? 0)} de ${formatBytes(a.quotaTotal!)}'
-                          : a.provider,
+                          : a.managed
+                              ? 'Espacio incluido con tu cuenta'
+                              : a.provider,
                     ),
                     trailing: a.status == 'ACTIVE'
                         ? null
@@ -136,11 +138,15 @@ class _ConnectTile extends StatelessWidget {
         leading: Container(
           width: 36,
           height: 36,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: Color(provider.color).withOpacity(0.15),
             borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(Icons.add, color: Color(provider.color)),
+          child: Text(
+            provider.name.isEmpty ? '?' : provider.name.substring(0, 1),
+            style: TextStyle(color: Color(provider.color), fontWeight: FontWeight.bold),
+          ),
         ),
         title: Text(provider.name),
         subtitle: Text(provider.tagline),

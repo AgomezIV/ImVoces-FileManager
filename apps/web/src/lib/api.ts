@@ -87,6 +87,7 @@ export const api = {
       false,
     ),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST', body: '{}' }, false),
+  me: () => request<{ id: string; email: string; name: string | null; avatarUrl: string | null }>('/auth/me'),
 
   accounts: () => request<AccountsResponse>('/accounts'),
   /** Devuelve la URL de consentimiento del proveedor: el usuario solo inicia sesión. */
