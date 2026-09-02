@@ -60,11 +60,16 @@ final sessionProvider =
   (ref) => SessionNotifier(ref.watch(apiProvider)),
 );
 
-final accountsProvider = FutureProvider<List<StorageAccount>>((ref) async {
+final accountsViewProvider = FutureProvider<AccountsView>((ref) async {
   // Se recarga cuando cambia la sesión: al salir no deben quedar cuentas en pantalla.
   ref.watch(sessionProvider);
   return ref.watch(apiProvider).accounts();
 });
+
+/// Solo las cuentas, que es lo que necesitan el explorador y el "Enviar a…".
+final accountsProvider = FutureProvider<List<StorageAccount>>(
+  (ref) async => (await ref.watch(accountsViewProvider.future)).accounts,
+);
 
 /// Ubicación del explorador: qué cuenta y qué carpeta se está mirando.
 class BrowserLocation {

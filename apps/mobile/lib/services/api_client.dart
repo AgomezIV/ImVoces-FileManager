@@ -109,15 +109,16 @@ class ApiClient {
     await _saveRefresh(null);
   }
 
-  Future<List<StorageAccount>> accounts() async {
+  Future<AccountsView> accounts() async {
     final res = await _dio.get<Map<String, dynamic>>('/accounts');
-    return (res.data!['accounts'] as List<dynamic>)
-        .map((e) => StorageAccount.fromJson(e as Map<String, dynamic>))
-        .toList();
+    return AccountsView.fromJson(res.data!);
   }
 
-  Future<String> driveConnectUrl() async {
-    final res = await _dio.post<Map<String, dynamic>>('/accounts/gdrive/connect');
+  /// URL de consentimiento del proveedor. El usuario solo verá su login.
+  Future<String> connectUrl(String provider) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/accounts/${provider.toLowerCase()}/connect',
+    );
     return res.data!['authUrl'] as String;
   }
 

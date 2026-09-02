@@ -8,7 +8,7 @@ tu conexión y no se detienen si cierras la app.
 
 Dos clientes sobre un mismo backend:
 
-- **Web** — Next.js, explorador de doble panel con arrastrar y soltar.
+- **Web** — Next.js, explorador con barra lateral de ubicaciones, como cualquier gestor de archivos.
 - **Android** — Flutter, distribuible como `.apk`.
 
 ## Arquitectura
@@ -78,6 +78,33 @@ flutter build apk --release --split-per-abi \
 
 El `.apk` sale en `build/app/outputs/flutter-apk/`. El workflow de CI lo compila y lo sube como
 artifact en cada push.
+
+## Conectar nubes sin claves
+
+Un usuario normal **no toca ninguna credencial técnica**. Conecta pulsando un botón e
+iniciando sesión con su cuenta de siempre:
+
+| Nube | Cómo la conecta el usuario |
+|---|---|
+| Google Drive | Inicia sesión con Google |
+| Dropbox | Inicia sesión con Dropbox |
+| OneDrive | Inicia sesión con Microsoft |
+| **Espacio incluido** | Ya está: lo crea la aplicación al entrar |
+| Cloudflare R2 / S3 propios | Opción avanzada, con claves de API |
+
+Los client id y secret de esas tres nubes los registras **tú una vez** en el servidor
+(`.env`), no cada usuario. Un proveedor sin configurar sencillamente no aparece.
+
+**El espacio incluido** es un bucket tuyo compartido, con una carpeta por persona
+(`users/<userId>/`). El aislamiento lo impone el driver: toda ruta se resuelve bajo ese
+prefijo y el salto de directorio está rechazado, con pruebas en
+`packages/providers/src/s3-prefix.test.ts`. Es lo que permite que alguien que solo tiene
+Drive tenga un destino al que copiar desde el primer minuto.
+
+> Cloudflare R2 no ofrece login de usuario final: su API solo admite claves. Por eso R2
+> aparece como opción avanzada, y por eso el espacio incluido usa **tus** claves y no las
+> de cada usuario. Las claves de la API S3 de R2 salen de *R2 → Manage API tokens*; un
+> token de cuenta (`cfat_…`) no sirve para esto.
 
 ## Google Cloud
 

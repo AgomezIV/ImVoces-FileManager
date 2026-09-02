@@ -19,7 +19,7 @@ import type {
   Ref, StorageProvider, WritableSink, WriteMeta,
 } from '../types.js';
 import { toProviderError } from '../errors.js';
-import { basename, dirname, joinPath, normalizePath } from '../paths.js';
+import { basename, dirname, joinPath, normalizePath, normalizeRoot, stripRoot, withRoot } from '../paths.js';
 
 export interface S3Credentials {
   provider: 'R2' | 'S3';
@@ -29,6 +29,15 @@ export interface S3Credentials {
   accessKeyId: string;
   secretAccessKey: string;
   forcePathStyle: boolean;
+  /**
+   * Prefijo raiz dentro del bucket. Toda ruta se resuelve por debajo de el y
+   * nada fuera es alcanzable, ni siquiera con una ruta manipulada.
+   *
+   * Es lo que permite el almacenamiento gestionado: un unico bucket del
+   * operador con `users/<userId>/` por persona, sin que nadie vea lo ajeno.
+   * Vacio = el bucket entero (cuenta propia del usuario).
+   */
+  rootPrefix?: string;
 }
 
 /** S3 exige partes de ≥5 MiB (salvo la última). */
@@ -56,8 +65,10 @@ export class S3Provider implements StorageProvider {
   };
 
   private readonly client: S3Client;
+  private readonly creds: S3Credentials;
 
-  constructor(private readonly creds: S3Credentials) {
+  constructor(creds: S3Credentials) {
+    this.creds = creds;
     this.id = creds.provider;
     this.client = new S3Client({
       region: creds.region || 'auto',
@@ -70,13 +81,16 @@ export class S3Provider implements StorageProvider {
     });
   }
 
-  /** '/a/b.txt' → 'a/b.txt'. La raíz es la cadena vacía. */
+  private get root(): string {
+    return normalizeRoot(this.creds.rootPrefix);
+  }
+
   private toKey(path: string): string {
-    return normalizePath(path).replace(/^\//, '');
+    return withRoot(this.creds.rootPrefix, path);
   }
 
   private toPath(key: string): string {
-    return normalizePath(`/${key}`);
+    return stripRoot(this.creds.rootPrefix, key);
   }
 
   async identify() {
@@ -339,7 +353,11 @@ export class S3Provider implements StorageProvider {
     do {
       const res = await this.client.send(
         new ListObjectsV2Command({
-          Bucket: this.creds.bucket, MaxKeys: 1000, ContinuationToken: cursor,
+          Bucket: this.creds.bucket,
+          // Acotado al prefijo raiz: la busqueda nunca cruza a otro usuario.
+          Prefix: this.root ? `${this.root}/` : undefined,
+          MaxKeys: 1000,
+          ContinuationToken: cursor,
         }),
       );
       for (const o of res.Contents ?? []) {

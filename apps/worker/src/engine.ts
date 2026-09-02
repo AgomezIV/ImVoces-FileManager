@@ -5,7 +5,7 @@ import type { Redis } from 'ioredis';
 import { prisma, type StorageAccount, type TransferItem } from '@imvoces/db';
 import {
   basename, dirname, joinPath, providerFor, encryptJson,
-  type DriveCredentials, type StorageProvider,
+  type DriveCredentials, type OAuthCredentials, type StorageProvider,
 } from '@imvoces/providers';
 import { env } from './env.js';
 import { backoffMs, isRetryable, MAX_ATTEMPTS, sleep } from './retry.js';
@@ -23,14 +23,20 @@ export class ProviderCache {
 
     const account = await prisma.storageAccount.findUniqueOrThrow({ where: { id: accountId } });
     this.accounts.set(accountId, account);
+    // Los tokens que el driver refresque a mitad de una transferencia larga se
+    // persisten al vuelo: si el worker cae, al reanudar siguen siendo validos.
+    const persist = async (id: string, creds: DriveCredentials | OAuthCredentials) => {
+      await prisma.storageAccount
+        .update({ where: { id }, data: { credentialsEnc: encryptJson(creds) } })
+        .catch(() => undefined);
+    };
     const provider = providerFor(account, {
       googleClientId: env.GOOGLE_CLIENT_ID,
       googleClientSecret: env.GOOGLE_CLIENT_SECRET,
-      onDriveTokensRefreshed: async (id: string, creds: DriveCredentials) => {
-        await prisma.storageAccount
-          .update({ where: { id }, data: { credentialsEnc: encryptJson(creds) } })
-          .catch(() => undefined);
-      },
+      dropbox: { clientId: env.DROPBOX_CLIENT_ID, clientSecret: env.DROPBOX_CLIENT_SECRET },
+      microsoft: { clientId: env.MICROSOFT_CLIENT_ID, clientSecret: env.MICROSOFT_CLIENT_SECRET },
+      onDriveTokensRefreshed: persist,
+      onOAuthTokensRefreshed: persist,
     });
     this.cache.set(accountId, provider);
     return provider;

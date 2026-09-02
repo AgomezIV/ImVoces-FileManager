@@ -8,6 +8,10 @@ const schema = z.object({
   CREDENTIALS_KEY: z.string().min(1),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
+  DROPBOX_CLIENT_ID: z.string().default(''),
+  DROPBOX_CLIENT_SECRET: z.string().default(''),
+  MICROSOFT_CLIENT_ID: z.string().default(''),
+  MICROSOFT_CLIENT_SECRET: z.string().default(''),
   TRANSFER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   TRANSFER_PART_SIZE_MB: z.coerce.number().int().min(5).max(128).default(16),
 });

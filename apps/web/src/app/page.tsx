@@ -1,23 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useSession } from '@/components/SessionProvider';
 import { useTransfers } from '@/components/TransfersProvider';
-import { FilePanel, type PanelState } from '@/components/FilePanel';
+import { Sidebar } from '@/components/Sidebar';
+import { FileBrowser } from '@/components/FileBrowser';
+import { SelectionBar } from '@/components/SelectionBar';
+import { DestinationDialog } from '@/components/DestinationDialog';
 import { TransferTray } from '@/components/TransferTray';
 import { GoogleLoginButton } from '@/components/GoogleLoginButton';
-
-const EMPTY: PanelState = { accountId: null, path: '/', selected: [] };
+import { IconCloud } from '@/components/Icons';
 
 export default function Home() {
   const { user, loading, logout } = useSession();
   const { track } = useTransfers();
-  const [left, setLeft] = useState<PanelState>(EMPTY);
-  const [right, setRight] = useState<PanelState>(EMPTY);
-  const [busy, setBusy] = useState(false);
+  const queryClient = useQueryClient();
+
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [path, setPath] = useState('/');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [dialog, setDialog] = useState<'COPY' | 'MOVE' | null>(null);
 
   const accountsQuery = useQuery({
     queryKey: ['accounts'],
@@ -26,51 +31,87 @@ export default function Home() {
   });
   const accounts = accountsQuery.data?.accounts ?? [];
 
+  // Sin ubicación elegida se abre la primera: un explorador vacío no sirve de nada.
+  useEffect(() => {
+    if (!accountId && accounts.length > 0) setAccountId(accounts[0]!.id);
+  }, [accountId, accounts]);
+
+  const navigate = useCallback((next: string) => {
+    setPath(next);
+    setSelected([]);
+  }, []);
+
+  const openLocation = useCallback((id: string) => {
+    setAccountId(id);
+    setPath('/');
+    setSelected([]);
+  }, []);
+
   /**
-   * El "un clic": la selección del panel origen se manda tal cual al destino.
-   * No se expanden carpetas aquí — eso lo hace el worker — así que copiar
-   * 10 000 archivos cuesta exactamente la misma interacción que copiar uno.
+   * Lanza la transferencia. El cliente no expande carpetas: manda la selección
+   * tal cual y el worker resuelve el árbol, así que copiar 10 000 archivos
+   * cuesta lo mismo que copiar uno.
    */
   const transfer = useCallback(
-    async (from: 'left' | 'right', kind: 'COPY' | 'MOVE' = 'COPY') => {
-      const src = from === 'left' ? left : right;
-      const dest = from === 'left' ? right : left;
-      if (!src.accountId || !dest.accountId || src.selected.length === 0) return;
-
-      setBusy(true);
-      try {
-        const job = await api.createTransfer({
-          kind,
-          onConflict: 'rename',
-          items: src.selected.map((path) => ({
-            src: { accountId: src.accountId as string, path },
-            dest: {
-              accountId: dest.accountId as string,
-              path: `${dest.path === '/' ? '' : dest.path}/${path.slice(path.lastIndexOf('/') + 1)}`,
-            },
-          })),
-        });
-        track(job);
-        (from === 'left' ? setLeft : setRight)({ ...src, selected: [] });
-      } finally {
-        setBusy(false);
-      }
+    async (dest: { accountId: string; path: string }, kind: 'COPY' | 'MOVE') => {
+      if (!accountId || selected.length === 0) return;
+      const job = await api.createTransfer({
+        kind,
+        onConflict: 'rename',
+        items: selected.map((p) => ({
+          src: { accountId, path: p },
+          dest: {
+            accountId: dest.accountId,
+            path: `${dest.path === '/' ? '' : dest.path}/${p.slice(p.lastIndexOf('/') + 1)}`,
+          },
+        })),
+      });
+      track(job);
+      setSelected([]);
+      setDialog(null);
     },
-    [left, right, track],
+    [accountId, selected, track],
   );
 
-  if (loading) return <main style={{ padding: 40 }}>Cargando…</main>;
+  const download = async () => {
+    if (!accountId || selected.length !== 1) return;
+    const { url } = await api.downloadUrl(accountId, selected[0] as string);
+    window.open(url, '_blank', 'noopener');
+  };
+
+  const rename = async () => {
+    if (!accountId || selected.length !== 1) return;
+    const current = (selected[0] as string).split('/').pop() ?? '';
+    const name = window.prompt('Nuevo nombre', current);
+    if (!name || name === current) return;
+    await api.rename(accountId, selected[0] as string, name);
+    setSelected([]);
+    await queryClient.invalidateQueries({ queryKey: ['list', accountId, path] });
+  };
+
+  const remove = async () => {
+    if (!accountId || selected.length === 0) return;
+    if (!window.confirm(`¿Eliminar ${selected.length} elemento(s)?`)) return;
+    await api.remove(accountId, selected);
+    setSelected([]);
+    await queryClient.invalidateQueries({ queryKey: ['list', accountId, path] });
+  };
+
+  if (loading) {
+    return <main style={{ display: 'grid', placeItems: 'center', height: '100vh' }} className="muted">Cargando…</main>;
+  }
 
   if (!user) {
     return (
       <main style={{ display: 'grid', placeItems: 'center', minHeight: '100vh', padding: 24 }}>
-        <div className="card" style={{ padding: 32, maxWidth: 420, textAlign: 'center' }}>
-          <h1 style={{ marginTop: 0 }}>ImVoces FileManager</h1>
-          <p className="muted">
-            Conecta Google Drive, Cloudflare R2 y más, y mueve archivos entre plataformas con un clic.
-            Las transferencias corren en el servidor: no gastan tu conexión.
+        <div className="card" style={{ padding: 36, maxWidth: 400, textAlign: 'center', boxShadow: 'var(--shadow-2)' }}>
+          <span style={{ color: 'var(--brand)', display: 'inline-flex' }}><IconCloud size={38} /></span>
+          <h1 style={{ margin: '12px 0 6px', fontSize: 20 }}>ImVoces FileManager</h1>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Todos tus archivos, de todas tus nubes, en un solo sitio. Copiar entre
+            plataformas ocurre en el servidor: no gasta tu conexión.
           </p>
-          <div style={{ display: 'grid', placeItems: 'center', marginTop: 20 }}>
+          <div style={{ display: 'grid', placeItems: 'center', marginTop: 22 }}>
             <GoogleLoginButton />
           </div>
         </div>
@@ -78,61 +119,64 @@ export default function Home() {
     );
   }
 
-  const canLeftToRight = left.selected.length > 0 && !!right.accountId && !busy;
-  const canRightToLeft = right.selected.length > 0 && !!left.accountId && !busy;
+  const account = accounts.find((a) => a.id === accountId);
 
   return (
-    <main style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: 16, gap: 12 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong>ImVoces FileManager</strong>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <Link href="/accounts">Cuentas</Link>
-          <span className="muted">{user.email}</span>
-          <button onClick={() => void logout()}>Salir</button>
-        </div>
-      </header>
+    <main style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar
+        accounts={accounts}
+        activeId={accountId}
+        onSelect={openLocation}
+        onDropTo={(destAccount) => void transfer({ accountId: destAccount, path: '/' }, 'COPY')}
+        user={user}
+        onLogout={() => void logout()}
+      />
 
-      {accounts.length === 0 ? (
-        <div className="card" style={{ padding: 24, textAlign: 'center' }}>
-          <p>Todavía no has conectado ninguna cuenta.</p>
-          <Link href="/accounts">
-            <button className="primary">Conectar mi primera cuenta</button>
-          </Link>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 12, flex: 1, minHeight: 0 }}>
-          <FilePanel
-            side="left"
-            accounts={accounts}
-            state={left}
-            onChange={setLeft}
-            onDropFrom={(from) => from === 'right' && void transfer('right')}
-          />
-
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-            <button className="primary" disabled={!canLeftToRight} onClick={() => void transfer('left')} title="Copiar al panel derecho">
-              Copiar →
-            </button>
-            <button disabled={!canLeftToRight} onClick={() => void transfer('left', 'MOVE')} style={{ fontSize: 12 }}>
-              Mover →
-            </button>
-            <div style={{ height: 12 }} />
-            <button className="primary" disabled={!canRightToLeft} onClick={() => void transfer('right')} title="Copiar al panel izquierdo">
-              ← Copiar
-            </button>
-            <button disabled={!canRightToLeft} onClick={() => void transfer('right', 'MOVE')} style={{ fontSize: 12 }}>
-              ← Mover
-            </button>
+      <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {accounts.length === 0 ? (
+          <div style={{ display: 'grid', placeItems: 'center', flex: 1, padding: 24, textAlign: 'center' }}>
+            <div>
+              <span className="dim" style={{ display: 'inline-flex' }}><IconCloud size={36} /></span>
+              <h2 style={{ fontSize: 17, margin: '10px 0 4px' }}>Conecta tu primera nube</h2>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Inicias sesión con tu cuenta de siempre. No hacen falta claves.
+              </p>
+              <Link href="/accounts"><button className="primary" style={{ marginTop: 8 }}>Conectar una nube</button></Link>
+            </div>
           </div>
+        ) : account ? (
+          <>
+            <FileBrowser
+              accountId={account.id}
+              accountLabel={account.label}
+              path={path}
+              selected={selected}
+              onNavigate={navigate}
+              onSelect={setSelected}
+            />
+            <SelectionBar
+              count={selected.length}
+              single={selected.length === 1}
+              onCopy={() => setDialog('COPY')}
+              onMove={() => setDialog('MOVE')}
+              onDownload={() => void download()}
+              onRename={() => void rename()}
+              onDelete={() => void remove()}
+              onClear={() => setSelected([])}
+            />
+          </>
+        ) : null}
+      </div>
 
-          <FilePanel
-            side="right"
-            accounts={accounts}
-            state={right}
-            onChange={setRight}
-            onDropFrom={(from) => from === 'left' && void transfer('left')}
-          />
-        </div>
+      {dialog && account && (
+        <DestinationDialog
+          accounts={accounts}
+          from={{ accountId: account.id, path }}
+          count={selected.length}
+          kind={dialog}
+          onCancel={() => setDialog(null)}
+          onConfirm={(dest) => void transfer(dest, dialog)}
+        />
       )}
 
       <TransferTray />

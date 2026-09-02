@@ -17,6 +17,27 @@ const schema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().min(1),
   GOOGLE_ALLOWED_AUDIENCES: z.string().default(''),
   GOOGLE_OAUTH_REDIRECT_URI: z.string().url().default('http://localhost:4000/accounts/callback'),
+
+  // Dropbox y Microsoft: se configuran una vez en el servidor. El usuario final
+  // solo pulsa "Conectar" e inicia sesion con su cuenta de siempre.
+  DROPBOX_CLIENT_ID: z.string().default(''),
+  DROPBOX_CLIENT_SECRET: z.string().default(''),
+  MICROSOFT_CLIENT_ID: z.string().default(''),
+  MICROSOFT_CLIENT_SECRET: z.string().default(''),
+
+  // Espacio de almacenamiento que ofrece la propia aplicacion. Un bucket del
+  // operador, con una carpeta por usuario. Asi alguien que solo tiene Google
+  // Drive ya tiene un destino al que copiar, sin claves ni configuracion.
+  MANAGED_STORAGE_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  MANAGED_STORAGE_LABEL: z.string().default('Mi espacio ImVoces'),
+  MANAGED_R2_ENDPOINT: z.string().default(''),
+  MANAGED_R2_BUCKET: z.string().default(''),
+  MANAGED_R2_REGION: z.string().default('auto'),
+  MANAGED_R2_ACCESS_KEY_ID: z.string().default(''),
+  MANAGED_R2_SECRET_ACCESS_KEY: z.string().default(''),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -28,6 +49,19 @@ if (!parsed.success) {
 export const env = parsed.data;
 
 export const corsOrigins = env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
+
+/** Configuracion de las apps OAuth que el operador registra una sola vez. */
+export const oauthApps = {
+  dropbox: { clientId: env.DROPBOX_CLIENT_ID, clientSecret: env.DROPBOX_CLIENT_SECRET },
+  microsoft: { clientId: env.MICROSOFT_CLIENT_ID, clientSecret: env.MICROSOFT_CLIENT_SECRET },
+};
+
+/** El espacio gestionado solo se ofrece si esta completo: sin medias tintas. */
+export const managedStorageReady =
+  env.MANAGED_STORAGE_ENABLED &&
+  !!env.MANAGED_R2_BUCKET &&
+  !!env.MANAGED_R2_ACCESS_KEY_ID &&
+  !!env.MANAGED_R2_SECRET_ACCESS_KEY;
 
 /** Audiencias aceptadas al validar el idToken: el client web más los de Android. */
 export const googleAudiences = [

@@ -12,6 +12,21 @@ export const setAccessToken = (token: string | null) => {
 };
 export const getAccessToken = () => accessToken;
 
+/** Proveedor que el servidor tiene configurado y puede ofrecer ahora mismo. */
+export interface AvailableProvider {
+  id: string;
+  name: string;
+  color: string;
+  connectMode: 'oauth' | 'managed' | 'credentials';
+  tagline: string;
+}
+
+export interface AccountsResponse {
+  accounts: (StorageAccountView & { managed?: boolean })[];
+  available: AvailableProvider[];
+  managedStorage: boolean;
+}
+
 class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -48,20 +63,33 @@ async function request<T>(path: string, init: RequestInit = {}, retry = true): P
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
+/**
+ * Renueva la sesión con la cookie de refresh.
+ *
+ * Nunca lanza: la API caída o sin red devuelve `false` igual que un rechazo.
+ * Si propagara la excepción, quien la llama al arrancar se quedaría sin
+ * resolver y la aplicación colgaría en la pantalla de carga.
+ */
 export async function refreshSession(): Promise<boolean> {
-  const res = await fetch(`${BASE}/auth/refresh`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  });
-  if (!res.ok) {
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (!res.ok) {
+      setAccessToken(null);
+      return false;
+    }
+    const data = (await res.json()) as { accessToken: string };
+    setAccessToken(data.accessToken);
+    return true;
+  } catch {
+    // Error de red: no hay sesión utilizable, pero tampoco es un fallo fatal.
     setAccessToken(null);
     return false;
   }
-  const data = (await res.json()) as { accessToken: string };
-  setAccessToken(data.accessToken);
-  return true;
 }
 
 export const api = {
@@ -72,9 +100,15 @@ export const api = {
       false,
     ),
   logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST', body: '{}' }, false),
+  me: () => request<{ id: string; email: string; name: string | null; avatarUrl: string | null }>('/auth/me'),
 
-  accounts: () => request<{ accounts: StorageAccountView[] }>('/accounts'),
-  connectDrive: () => request<{ authUrl: string }>('/accounts/gdrive/connect', { method: 'POST', body: '{}' }),
+  accounts: () => request<AccountsResponse>('/accounts'),
+  /** Devuelve la URL de consentimiento del proveedor: el usuario solo inicia sesión. */
+  connect: (provider: string) =>
+    request<{ authUrl: string }>(`/accounts/${provider.toLowerCase()}/connect`, {
+      method: 'POST',
+      body: '{}',
+    }),
   connectS3: (input: unknown) =>
     request<StorageAccountView>('/accounts/s3', { method: 'POST', body: JSON.stringify(input) }),
   disconnect: (id: string) => request<{ ok: true }>(`/accounts/${id}`, { method: 'DELETE' }),

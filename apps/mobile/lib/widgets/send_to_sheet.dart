@@ -11,7 +11,7 @@ Future<void> showSendToSheet(BuildContext context, WidgetRef ref) async {
   final origin = ref.read(locationProvider);
   if (selection.isEmpty || origin.accountId == null) return;
 
-  final accounts = await ref.read(apiProvider).accounts();
+  final accounts = (await ref.read(apiProvider).accounts()).accounts;
   if (!context.mounted) return;
 
   await showModalBottomSheet<void>(
