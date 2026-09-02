@@ -20,12 +20,18 @@ import {
   IconNewFolder, IconRefresh, IconRename, IconTrash,
 } from '@/components/Icons';
 import { previewMode } from '@/lib/preview';
+import { entryUid } from '@/lib/fileTypes';
 
 /** Lo que espera para pegarse. `cut` mueve, `copy` copia. */
+interface ClipboardItem {
+  path: string;
+  nativeId: string | null;
+}
+
 interface Clipboard {
   mode: 'copy' | 'cut';
   accountId: string;
-  paths: string[];
+  items: ClipboardItem[];
 }
 
 export default function Home() {
@@ -42,6 +48,16 @@ export default function Home() {
   const [preview, setPreview] = useState<{ list: RemoteEntry[]; index: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: RemoteEntry | null } | null>(null);
   const [clipboard, setClipboard] = useState<Clipboard | null>(null);
+
+  /**
+   * Entradas seleccionadas, resueltas desde sus identificadores.
+   *
+   * `selected` guarda uids porque dos archivos de Drive pueden compartir ruta;
+   * las operaciones necesitan la entrada entera para mandar también el id del
+   * proveedor y actuar sobre el archivo exacto.
+   */
+  const selectedEntries = entries.filter((e) => selected.includes(entryUid(e)));
+  const only = selectedEntries.length === 1 ? selectedEntries[0] : null;
 
   const accountsQuery = useQuery({
     queryKey: ['accounts'],
@@ -79,16 +95,18 @@ export default function Home() {
    */
   const transfer = useCallback(
     async (
-      src: { accountId: string; paths: string[] },
+      src: { accountId: string; items: ClipboardItem[] },
       dest: { accountId: string; path: string },
       kind: 'COPY' | 'MOVE',
     ) => {
-      if (src.paths.length === 0) return;
+      if (src.items.length === 0) return;
       const job = await api.createTransfer({
         kind,
         onConflict: 'rename',
-        items: src.paths.map((p) => ({
-          src: { accountId: src.accountId, path: p },
+        items: src.items.map(({ path: p, nativeId }) => ({
+          // El id nativo viaja con el origen: con dos archivos homónimos en
+          // Drive, la copia apunta al que el usuario eligió.
+          src: { accountId: src.accountId, path: p, nativeId: nativeId ?? undefined },
           dest: {
             accountId: dest.accountId,
             path: `${dest.path === '/' ? '' : dest.path}/${p.slice(p.lastIndexOf('/') + 1)}`,
@@ -105,7 +123,7 @@ export default function Home() {
   const paste = useCallback(async () => {
     if (!clipboard || !accountId) return;
     await transfer(
-      { accountId: clipboard.accountId, paths: clipboard.paths },
+      { accountId: clipboard.accountId, items: clipboard.items },
       { accountId, path },
       clipboard.mode === 'cut' ? 'MOVE' : 'COPY',
     );
@@ -114,27 +132,26 @@ export default function Home() {
   }, [accountId, clipboard, path, transfer]);
 
   const download = useCallback(() => {
-    if (!accountId || selected.length !== 1) return;
-    window.open(api.contentUrl(accountId, selected[0] as string, true), '_blank', 'noopener');
-  }, [accountId, selected]);
+    if (!accountId || !only) return;
+    window.open(api.contentUrl(accountId, only.path, true, only.nativeId), '_blank', 'noopener');
+  }, [accountId, only]);
 
   const rename = useCallback(async () => {
-    if (!accountId || selected.length !== 1) return;
-    const current = (selected[0] as string).split('/').pop() ?? '';
-    const name = window.prompt('Nuevo nombre', current);
-    if (!name || name === current) return;
-    await api.rename(accountId, selected[0] as string, name);
+    if (!accountId || !only) return;
+    const name = window.prompt('Nuevo nombre', only.name);
+    if (!name || name === only.name) return;
+    await api.rename(accountId, only.path, name, only.nativeId);
     setSelected([]);
     await invalidate();
-  }, [accountId, invalidate, selected]);
+  }, [accountId, invalidate, only]);
 
   const remove = useCallback(async () => {
-    if (!accountId || selected.length === 0) return;
-    if (!window.confirm(`¿Eliminar ${selected.length} elemento(s)?`)) return;
-    await api.remove(accountId, selected);
+    if (!accountId || selectedEntries.length === 0) return;
+    if (!window.confirm(`¿Eliminar ${selectedEntries.length} elemento(s)?`)) return;
+    await api.remove(accountId, selectedEntries.map((e) => ({ path: e.path, nativeId: e.nativeId })));
     setSelected([]);
     await invalidate();
-  }, [accountId, invalidate, selected]);
+  }, [accountId, invalidate, selectedEntries]);
 
   const newFolder = useCallback(async () => {
     if (!accountId) return;
@@ -159,18 +176,19 @@ export default function Home() {
       if (preview) return;
 
       const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === 'c' && selected.length && accountId) {
-        setClipboard({ mode: 'copy', accountId, paths: selected });
-      } else if (mod && e.key.toLowerCase() === 'x' && selected.length && accountId) {
-        setClipboard({ mode: 'cut', accountId, paths: selected });
+      const asItems = () => selectedEntries.map((x) => ({ path: x.path, nativeId: x.nativeId }));
+      if (mod && e.key.toLowerCase() === 'c' && selectedEntries.length && accountId) {
+        setClipboard({ mode: 'copy', accountId, items: asItems() });
+      } else if (mod && e.key.toLowerCase() === 'x' && selectedEntries.length && accountId) {
+        setClipboard({ mode: 'cut', accountId, items: asItems() });
       } else if (mod && e.key.toLowerCase() === 'v' && clipboard) {
         void paste();
       } else if (mod && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        setSelected(entries.map((x) => x.path));
-      } else if (e.key === 'Delete' && selected.length) {
+        setSelected(entries.map(entryUid));
+      } else if (e.key === 'Delete' && selectedEntries.length) {
         void remove();
-      } else if (e.key === 'F2' && selected.length === 1) {
+      } else if (e.key === 'F2' && selectedEntries.length === 1) {
         void rename();
       } else if (e.key === 'Escape') {
         setSelected([]);
@@ -178,11 +196,11 @@ export default function Home() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [accountId, clipboard, entries, paste, preview, remove, rename, selected]);
+  }, [accountId, clipboard, entries, paste, preview, remove, rename, selectedEntries]);
 
   const menuItems = useCallback((): MenuEntry[] => {
     const entry = menu?.entry ?? null;
-    const many = selected.length;
+    const many = selectedEntries.length;
 
     if (!entry) {
       return [
@@ -204,8 +222,8 @@ export default function Home() {
         onSelect: () => (isFolder ? navigate(entry.path, 'in') : openFile(entry, entries)),
       },
       null,
-      { id: 'copy', label: 'Copiar', icon: <IconCopy />, shortcut: 'Ctrl+C', onSelect: () => accountId && setClipboard({ mode: 'copy', accountId, paths: selected }) },
-      { id: 'cut', label: 'Cortar', icon: <IconMove />, shortcut: 'Ctrl+X', onSelect: () => accountId && setClipboard({ mode: 'cut', accountId, paths: selected }) },
+      { id: 'copy', label: 'Copiar', icon: <IconCopy />, shortcut: 'Ctrl+C', onSelect: () => accountId && setClipboard({ mode: 'copy', accountId, items: selectedEntries.map((x) => ({ path: x.path, nativeId: x.nativeId })) }) },
+      { id: 'cut', label: 'Cortar', icon: <IconMove />, shortcut: 'Ctrl+X', onSelect: () => accountId && setClipboard({ mode: 'cut', accountId, items: selectedEntries.map((x) => ({ path: x.path, nativeId: x.nativeId })) }) },
       { id: 'paste', label: 'Pegar', icon: <IconCopy />, shortcut: 'Ctrl+V', disabled: !clipboard, onSelect: () => void paste() },
       null,
       { id: 'copyto', label: 'Copiar a otra nube…', icon: <IconCopy />, onSelect: () => setDialog('COPY') },
@@ -216,7 +234,7 @@ export default function Home() {
       null,
       { id: 'delete', label: `Eliminar${many > 1 ? ` (${many})` : ''}`, icon: <IconTrash />, shortcut: 'Supr', danger: true, onSelect: () => void remove() },
     ];
-  }, [accountId, clipboard, download, entries, invalidate, menu, navigate, newFolder, openFile, paste, remove, rename, selected]);
+  }, [accountId, clipboard, download, entries, invalidate, menu, navigate, newFolder, openFile, paste, remove, rename, selectedEntries]);
 
   if (loading) {
     return <main style={{ display: 'grid', placeItems: 'center', height: '100vh' }} className="muted">Cargando…</main>;
@@ -249,7 +267,12 @@ export default function Home() {
         activeId={accountId}
         onSelect={openLocation}
         onDropTo={(dest) =>
-          accountId && void transfer({ accountId, paths: selected }, { accountId: dest, path: '/' }, 'COPY')
+          accountId &&
+          void transfer(
+            { accountId, items: selectedEntries.map((x) => ({ path: x.path, nativeId: x.nativeId })) },
+            { accountId: dest, path: '/' },
+            'COPY',
+          )
         }
         user={user}
         onLogout={() => void logout()}
@@ -285,8 +308,8 @@ export default function Home() {
               }}
             />
             <SelectionBar
-              count={selected.length}
-              single={selected.length === 1}
+              count={selectedEntries.length}
+              single={selectedEntries.length === 1}
               onCopy={() => setDialog('COPY')}
               onMove={() => setDialog('MOVE')}
               onDownload={download}
@@ -306,10 +329,16 @@ export default function Home() {
         <DestinationDialog
           accounts={accounts}
           from={{ accountId: account.id, path }}
-          count={selected.length}
+          count={selectedEntries.length}
           kind={dialog}
           onCancel={() => setDialog(null)}
-          onConfirm={(dest) => void transfer({ accountId: account.id, paths: selected }, dest, dialog)}
+          onConfirm={(dest) =>
+            void transfer(
+              { accountId: account.id, items: selectedEntries.map((x) => ({ path: x.path, nativeId: x.nativeId })) },
+              dest,
+              dialog,
+            )
+          }
         />
       )}
 

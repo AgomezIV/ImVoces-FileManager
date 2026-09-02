@@ -41,7 +41,7 @@ jobs:
           pnpm --filter @imvoces/web exec tsc --noEmit
 
       - name: Tests de proveedores
-        run: node --test --experimental-strip-types packages/providers/src/paths.test.ts
+        run: node --test --experimental-strip-types packages/providers/src/*.test.ts
 
       - name: Build de la web
         run: pnpm --filter @imvoces/web build

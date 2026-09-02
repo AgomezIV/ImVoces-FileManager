@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { RemoteEntry } from '@imvoces/contracts';
 import { api } from '@/lib/api';
 import { formatBytes, formatDate } from '@/lib/format';
-import { fileKind, KIND_COLOR } from '@/lib/fileTypes';
+import { entryUid, fileKind, KIND_COLOR } from '@/lib/fileTypes';
 import { canThumbnail } from '@/lib/preview';
 import {
   IconArchive, IconArrowUp, IconAudio, IconDoc, IconFile, IconFolder, IconHome,
@@ -50,7 +50,7 @@ function Thumb({ accountId, entry, size }: { accountId: string; entry: RemoteEnt
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={entry.thumbnailUrl ?? api.contentUrl(accountId, entry.path)}
+        src={entry.thumbnailUrl ?? api.contentUrl(accountId, entry.path, false, entry.nativeId)}
         alt=""
         loading="lazy"
         decoding="async"
@@ -133,25 +133,22 @@ export function FileBrowser({
    */
   const activate = useCallback(
     (entry: RemoteEntry, index: number, e: React.MouseEvent) => {
+      const uid = entryUid(entry);
       if (e.shiftKey && lastIndex !== null) {
         const [from, to] = lastIndex < index ? [lastIndex, index] : [index, lastIndex];
-        onSelect(entries.slice(from, to + 1).map((x) => x.path));
+        onSelect(entries.slice(from, to + 1).map(entryUid));
         return;
       }
       if (e.ctrlKey || e.metaKey) {
         setLastIndex(index);
-        onSelect(
-          selected.includes(entry.path)
-            ? selected.filter((p) => p !== entry.path)
-            : [...selected, entry.path],
-        );
+        onSelect(selected.includes(uid) ? selected.filter((x) => x !== uid) : [...selected, uid]);
         return;
       }
       setLastIndex(index);
       if (entry.kind === 'folder') {
         onNavigate(entry.path, 'in');
       } else {
-        onSelect([entry.path]);
+        onSelect([uid]);
         onOpenFile(entry, entries);
       }
     },
@@ -184,13 +181,13 @@ export function FileBrowser({
   const rowProps = (entry: RemoteEntry, i: number) => ({
     draggable: true,
     onDragStart: (e: React.DragEvent) => {
-      if (!selected.includes(entry.path)) onSelect([entry.path]);
+      if (!selected.includes(entryUid(entry))) onSelect([entryUid(entry)]);
       e.dataTransfer.setData('text/imvoces-drag', '1');
       e.dataTransfer.effectAllowed = 'copy' as const;
     },
     onClick: (e: React.MouseEvent) => activate(entry, i, e),
     onContextMenu: (e: React.MouseEvent) => {
-      if (!selected.includes(entry.path)) onSelect([entry.path]);
+      if (!selected.includes(entryUid(entry))) onSelect([entryUid(entry)]);
       onContextMenu(e, entry);
     },
   });
@@ -312,18 +309,18 @@ export function FileBrowser({
             {entries.map((entry, i) =>
               view === 'grid' ? (
                 <div
-                  key={entry.path}
+                  key={entryUid(entry)}
                   {...rowProps(entry, i)}
                   title={entry.name}
                   style={{
                     display: 'grid', justifyItems: 'center', gap: 8, padding: '12px 8px',
                     borderRadius: 8, cursor: 'default', userSelect: 'none',
-                    background: selected.includes(entry.path) ? 'var(--brand-soft)' : 'transparent',
-                    outline: selected.includes(entry.path) ? '1px solid var(--brand)' : '1px solid transparent',
+                    background: selected.includes(entryUid(entry)) ? 'var(--brand-soft)' : 'transparent',
+                    outline: selected.includes(entryUid(entry)) ? '1px solid var(--brand)' : '1px solid transparent',
                     transition: 'background .1s ease',
                   }}
-                  onMouseEnter={(e) => { if (!selected.includes(entry.path)) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                  onMouseLeave={(e) => { if (!selected.includes(entry.path)) e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { if (!selected.includes(entryUid(entry))) e.currentTarget.style.background = 'var(--surface-2)'; }}
+                  onMouseLeave={(e) => { if (!selected.includes(entryUid(entry))) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <span style={{ width: 84, height: 68, display: 'grid', placeItems: 'center' }}>
                     <Thumb accountId={accountId} entry={entry} size={46} />
@@ -340,18 +337,18 @@ export function FileBrowser({
                 </div>
               ) : (
                 <div
-                  key={entry.path}
+                  key={entryUid(entry)}
                   {...rowProps(entry, i)}
                   style={{
                     display: 'grid', gridTemplateColumns: '1fr 110px 140px', gap: 12,
                     alignItems: 'center', padding: '0 16px', height: 'var(--row-h)',
                     cursor: 'default', userSelect: 'none',
-                    background: selected.includes(entry.path) ? 'var(--brand-soft)' : 'transparent',
-                    boxShadow: selected.includes(entry.path) ? 'inset 2px 0 0 var(--brand)' : 'none',
+                    background: selected.includes(entryUid(entry)) ? 'var(--brand-soft)' : 'transparent',
+                    boxShadow: selected.includes(entryUid(entry)) ? 'inset 2px 0 0 var(--brand)' : 'none',
                     transition: 'background .1s ease',
                   }}
-                  onMouseEnter={(e) => { if (!selected.includes(entry.path)) e.currentTarget.style.background = 'var(--surface-2)'; }}
-                  onMouseLeave={(e) => { if (!selected.includes(entry.path)) e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { if (!selected.includes(entryUid(entry))) e.currentTarget.style.background = 'var(--surface-2)'; }}
+                  onMouseLeave={(e) => { if (!selected.includes(entryUid(entry))) e.currentTarget.style.background = 'transparent'; }}
                 >
                   <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                     <span style={{ width: 22, height: 22, display: 'grid', placeItems: 'center', flexShrink: 0 }}>

@@ -28,3 +28,15 @@ export const KIND_COLOR: Record<FileKind, string> = {
   doc: '#3f7fbf',
   file: '#8a939e',
 };
+
+/**
+ * Identidad única de una entrada dentro de su carpeta.
+ *
+ * La ruta NO sirve: Google Drive admite dos archivos con el mismo nombre en la
+ * misma carpeta, así que dos entradas distintas comparten ruta. El id del
+ * proveedor sí las separa, y donde no lo hay (S3, donde la clave es única) la
+ * ruta ya es identidad suficiente.
+ */
+export function entryUid(entry: { path: string; nativeId?: string | null }): string {
+  return entry.nativeId ?? entry.path;
+}

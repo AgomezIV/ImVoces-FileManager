@@ -37,7 +37,7 @@ export function PreviewOverlay({ accountId, entries, index, onIndex, onClose }: 
   const [failed, setFailed] = useState(false);
 
   const mode = entry ? previewMode(entry.name, entry.mimeType) : 'none';
-  const src = entry ? api.contentUrl(accountId, entry.path) : '';
+  const src = entry ? api.contentUrl(accountId, entry.path, false, entry.nativeId) : '';
 
   useEffect(() => {
     setText(null);
@@ -108,7 +108,7 @@ export function PreviewOverlay({ accountId, entries, index, onIndex, onClose }: 
         </span>
 
         <a
-          href={api.contentUrl(accountId, entry.path, true)}
+          href={api.contentUrl(accountId, entry.path, true, entry.nativeId)}
           download={entry.name}
           onClick={(e) => e.stopPropagation()}
           style={{ color: 'inherit', textDecoration: 'none' }}

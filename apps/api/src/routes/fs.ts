@@ -51,9 +51,9 @@ export async function fsRoutes(app: FastifyInstance) {
   app.patch('/fs/rename', async (req) => {
     const parsed = renameSchema.safeParse(req.body);
     if (!parsed.success) throw badRequest('Cuerpo inválido', parsed.error.issues);
-    const { accountId, path, newName } = parsed.data;
+    const { accountId, path, nativeId, newName } = parsed.data;
     const provider = await providerForUser(req.userId, accountId);
-    const entry = await provider.rename({ path: normalizePath(path) }, newName);
+    const entry = await provider.rename({ path: normalizePath(path), nativeId }, newName);
     await audit(req.userId, 'fs.rename', 'ok', { accountId, from: path, to: entry.path }, req.ip);
     return entry;
   });
@@ -62,13 +62,13 @@ export async function fsRoutes(app: FastifyInstance) {
   app.delete('/fs', async (req) => {
     const parsed = deleteSchema.safeParse(req.body);
     if (!parsed.success) throw badRequest('Cuerpo inválido', parsed.error.issues);
-    const { accountId, paths } = parsed.data;
+    const { accountId, items } = parsed.data;
     const provider = await providerForUser(req.userId, accountId);
 
     const results = await Promise.all(
-      paths.map(async (path) => {
+      items.map(async ({ path, nativeId }) => {
         try {
-          await provider.remove({ path: normalizePath(path) });
+          await provider.remove({ path: normalizePath(path), nativeId });
           return { path, ok: true as const };
         } catch (err) {
           return { path, ok: false as const, error: (err as Error).message };
@@ -76,7 +76,10 @@ export async function fsRoutes(app: FastifyInstance) {
       }),
     );
     const failed = results.filter((r) => !r.ok).length;
-    await audit(req.userId, 'fs.delete', failed ? 'error' : 'ok', { accountId, paths, failed }, req.ip);
+    await audit(
+      req.userId, 'fs.delete', failed ? 'error' : 'ok',
+      { accountId, paths: items.map((i) => i.path), failed }, req.ip,
+    );
     return { results, failed };
   });
 
@@ -98,20 +101,21 @@ export async function fsRoutes(app: FastifyInstance) {
    * que un vídeo se puede saltar sin descargarlo entero.
    */
   app.get('/fs/content', async (req, reply) => {
-    const { accountId, path, download } = req.query as {
+    const { accountId, path, nativeId, download } = req.query as {
       accountId?: string;
       path?: string;
+      nativeId?: string;
       download?: string;
     };
     if (!accountId || !path) throw badRequest('Faltan accountId y path');
 
     const provider = await providerForUser(req.userId, accountId);
     const clean = normalizePath(path);
-    const entry = await provider.stat({ path: clean });
+    const entry = await provider.stat({ path: clean, nativeId });
     if (entry.kind === 'folder') throw badRequest('No se puede leer una carpeta');
 
     const range = parseRange(req.headers.range, entry.size);
-    const stream = await provider.openRead({ path: clean }, range ?? undefined);
+    const stream = await provider.openRead({ path: clean, nativeId }, range ?? undefined);
 
     const name = clean.slice(clean.lastIndexOf('/') + 1);
     reply
